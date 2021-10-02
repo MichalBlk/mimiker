@@ -256,11 +256,15 @@ typedef struct exec_vmspace {
   vaddr_t sbrk_end;
 } exec_vmspace_t;
 
+static void exec_vmspace_save(exec_vmspace_t *evms, proc_t *p) {
+  evms->uspace = p->p_uspace;
+  evms->sbrk = p->p_sbrk;
+  evms->sbrk_end = p->p_sbrk_end;
+}
+
 static void enter_new_vmspace(proc_t *p, exec_vmspace_t *saved,
                               vaddr_t *stack_top_p) {
-  saved->uspace = p->p_uspace;
-  saved->sbrk = p->p_sbrk;
-  saved->sbrk_end = p->p_sbrk_end;
+  exec_vmspace_save(saved, p);
 
   /* We are the only live thread in this process.
    * We can safely give it a new uspace. */
@@ -296,10 +300,15 @@ static void enter_new_vmspace(proc_t *p, exec_vmspace_t *saved,
 
 /* Return to the previous map, unmodified by exec. */
 static void restore_vmspace(proc_t *p, exec_vmspace_t *saved) {
+  exec_vmspace_t to_destroy;
+  exec_vmspace_save(&to_destroy, p);
+
   p->p_uspace = saved->uspace;
   p->p_sbrk = saved->sbrk;
   p->p_sbrk_end = saved->sbrk_end;
   vm_map_activate(p->p_uspace);
+
+  *saved = to_destroy;
 }
 
 /* Destroy the vm_map we began preparing. */
@@ -424,7 +433,6 @@ static int _do_execve(exec_args_t *args) {
    * previous vm_map, and permanently assign this one to the current process. */
   destroy_vmspace(&saved);
 
-  vm_map_activate(p->p_uspace);
   vm_map_dump(p->p_uspace);
 
   kfree(M_STR, p->p_elfpath);
@@ -435,6 +443,7 @@ static int _do_execve(exec_args_t *args) {
 
 fail:
   restore_vmspace(p, &saved);
+  /* `restore_vmspace` will set `saved` to the redundant VM space. */
   destroy_vmspace(&saved);
   return error;
 }
