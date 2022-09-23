@@ -56,6 +56,7 @@ SOURCES = \
 	time.c \
 	timer.c \
 	tmpfs.c \
+	token.c \
 	tty.c \
 	uart_tty.c \
 	uio.c \

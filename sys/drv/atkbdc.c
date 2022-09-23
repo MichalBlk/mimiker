@@ -10,7 +10,6 @@
 #include <sys/vnode.h>
 #include <sys/devfs.h>
 #include <sys/klog.h>
-#include <sys/condvar.h>
 #include <sys/malloc.h>
 #include <sys/ringbuf.h>
 #include <sys/bus.h>
@@ -18,6 +17,7 @@
 #include <dev/atkbdcreg.h>
 #include <sys/devclass.h>
 #include <sys/sched.h>
+#include <sys/token.h>
 #include <dev/evdev.h>
 
 /* XXX: resource size must be a power of 2 ?! */
@@ -31,7 +31,7 @@
 
 typedef struct atkbdc_state {
   spin_t lock;
-  condvar_t nonempty;
+  token_t token;
   ringbuf_t scancodes;
   resource_t *irq_res;
   resource_t *regs;
@@ -83,9 +83,10 @@ static void atkbdc_thread(void *arg) {
   uint8_t scancode;
 
   while (true) {
+    token_take_one(&atkbdc->token);
+
     WITH_SPIN_LOCK (&atkbdc->lock) {
-      while (!ringbuf_getb(&atkbdc->scancodes, &scancode))
-        cv_wait(&atkbdc->nonempty, &atkbdc->lock);
+      ringbuf_getb(&atkbdc->scancodes, &scancode);
     }
 
     keycode = evdev_scancode2key(&atkbdc->evdev_state, scancode);
@@ -128,8 +129,9 @@ static intr_filter_t atkbdc_intr(void *data) {
     ringbuf_putb(&atkbdc->scancodes, code);
     if (extended)
       ringbuf_putb(&atkbdc->scancodes, code2);
-    cv_signal(&atkbdc->nonempty);
   }
+
+  token_give_one(&atkbdc->token);
 
   return IF_FILTERED;
 }
@@ -195,7 +197,7 @@ static int atkbdc_attach(device_t *dev) {
   atkbdc->scancodes.size = KBD_BUFSIZE;
 
   spin_init(&atkbdc->lock, 0);
-  cv_init(&atkbdc->nonempty, "AT keyboard buffer non-empty");
+  token_init(&atkbdc->token, LK_TYPE_SPIN, 0);
   atkbdc->regs = device_take_ioports(dev, 0);
   assert(atkbdc->regs != NULL);
 

@@ -62,7 +62,7 @@ void _mtx_init(mtx_t *m, lk_attr_t attr, const char *name,
 /*! \brief Makes mutex unusable for further locking.
  *
  * \todo Not implemented yet. */
-#define mtx_destroy(m)
+#define mtx_destroy(m) ((void)0)
 
 /*! \brief Check if calling thread is the owner of \a m. */
 bool mtx_owned(mtx_t *m);

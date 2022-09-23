@@ -10,6 +10,7 @@
 #include <sys/proc.h>
 #include <sys/pool.h>
 #include <sys/time.h>
+#include <sys/token.h>
 
 #define KN_HASHSIZE 8
 
@@ -36,7 +37,7 @@ typedef struct kqueue {
   int kq_count;          /* number of pending events */
   knote_tailq_t kq_head; /* list of pending events */
   mtx_t kq_lock;         /* mutex for queue access */
-  condvar_t kq_cv;
+  token_t kq_token;
   knlist_t kq_knhash[KN_HASHSIZE]; /* hash table for knotes */
 } kqueue_t;
 
@@ -48,7 +49,7 @@ static inline knlist_t *kq_get_hashbucket(kqueue_t *kq, void *obj) {
 static kqueue_t *kqueue_create(void) {
   kqueue_t *kq = kmalloc(M_DEV, sizeof(kqueue_t), M_ZERO);
   mtx_init(&kq->kq_lock, 0);
-  cv_init(&kq->kq_cv, 0);
+  token_init(&kq->kq_token, LK_TYPE_BLOCK, 0);
 
   TAILQ_INIT(&kq->kq_head);
   for (int i = 0; i < KN_HASHSIZE; i++)
@@ -70,8 +71,8 @@ static void kqueue_drain(kqueue_t *kq) {
 
 static void kqueue_destroy(kqueue_t *kq) {
   kqueue_drain(kq);
-  cv_destroy(&kq->kq_cv);
   mtx_destroy(&kq->kq_lock);
+  token_destroy(&kq->kq_token);
   kfree(M_DEV, kq);
 }
 
@@ -246,6 +247,7 @@ static int kqueue_register(kqueue_t *kq, kevent_t *kev, void *obj) {
 static int kqueue_scan(kqueue_t *kq, kevent_t *eventlist, size_t nevents,
                        timespec_t *tsp, int *retval) {
   int error, event, timeout;
+  unsigned size = 0;
   size_t count = 0;
   systime_t sleepts;
   knote_tailq_t knqueue;
@@ -262,24 +264,23 @@ static int kqueue_scan(kqueue_t *kq, kevent_t *eventlist, size_t nevents,
     timeout = 0; /* no timeout, wait forever */
   }
 
-  mtx_lock(&kq->kq_lock);
+  if (token_try_take_all(&kq->kq_token, (int *)&size)) {
+    for (;;) {
+      if (timeout < 0)
+        goto done;
 
-  /* Block until there are no events or we time out. */
-  while (kq->kq_count == 0) {
-    if (timeout < 0) {
-      error = 0;
-      goto done;
+      error = token_take_all_timed(&kq->kq_token, timeout, (int *)&size);
+      if (!error)
+        break;
+      else if (error == EINTR)
+        return EINTR;
+
+      if (tsp)
+        timeout = sleepts - getsystime();
     }
-
-    error = cv_wait_timed(&kq->kq_cv, &kq->kq_lock, timeout);
-    if (error == EINTR) {
-      mtx_unlock(&kq->kq_lock);
-      return EINTR;
-    }
-
-    if (tsp)
-      timeout = sleepts - getsystime();
   }
+
+  mtx_lock(&kq->kq_lock);
 
   /* To ensure the correctness of the iteration over pending events,
    * we need to move already processed knotes to another list. `kq_head`
@@ -287,11 +288,8 @@ static int kqueue_scan(kqueue_t *kq, kevent_t *eventlist, size_t nevents,
    * for a moment.
    */
 
-  while (count < nevents) {
+  while (count < size && count < nevents) {
     assert(mtx_owned(&kq->kq_lock));
-
-    if (TAILQ_EMPTY(&kq->kq_head))
-      break;
 
     kn = TAILQ_FIRST(&kq->kq_head);
     TAILQ_REMOVE(&kq->kq_head, kn, kn_penlink);
@@ -320,8 +318,8 @@ static int kqueue_scan(kqueue_t *kq, kevent_t *eventlist, size_t nevents,
 
   TAILQ_CONCAT(&kq->kq_head, &knqueue, kn_penlink);
 
-done:
   mtx_unlock(&kq->kq_lock);
+done:
   *retval = count;
 
   return 0;
@@ -420,7 +418,7 @@ static void knote_enqueue(knote_t *kn) {
   kq->kq_count++;
   kn->kn_status |= KN_QUEUED;
 
-  cv_broadcast(&kq->kq_cv);
+  token_give_one(&kq->kq_token);
 }
 
 /*

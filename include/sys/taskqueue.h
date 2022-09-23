@@ -3,7 +3,7 @@
 
 #include <sys/queue.h>
 #include <sys/mutex.h>
-#include <sys/condvar.h>
+#include <sys/token.h>
 
 typedef struct task {
   STAILQ_ENTRY(task) t_link;
@@ -20,8 +20,7 @@ typedef STAILQ_HEAD(, task) task_list_t;
 
 typedef struct taskqueue {
   mtx_t tq_mutex;
-  /* worker waits on this cv for tq_list to become non empty */
-  condvar_t tq_nonempty;
+  token_t tq_token;
   task_list_t tq_list;
 } taskqueue_t;
 
