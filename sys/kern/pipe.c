@@ -12,6 +12,7 @@
 #include <sys/filedesc.h>
 #include <sys/proc.h>
 #include <sys/ringbuf.h>
+#include <sys/token.h>
 #include <sys/uio.h>
 
 /* Our pipes are unidrectional, since almost all software depends on POSIX
@@ -25,7 +26,7 @@ struct pipe {
   /* Pipe can be freed when both ends are closed */
   bool writer_closed; /*!< write end closed */
   bool reader_closed; /*!< read end closed */
-  condvar_t nonempty; /*!< used to wait data to appear in the buffer */
+  token_t token;      /*!< resource manager */
   condvar_t nonfull;  /*!< used to wait for free space in the buffer */
   ringbuf_t buf;      /*!< buffer with pipe data */
 };
@@ -37,7 +38,7 @@ static pipe_t *pipe_alloc(void) {
   mtx_init(&pipe->mtx, 0);
   pipe->writer_closed = false;
   pipe->reader_closed = false;
-  cv_init(&pipe->nonempty, "pipe_nonempty");
+  token_init(&pipe->token, LK_TYPE_BLOCK, 0);
   cv_init(&pipe->nonfull, "pipe_nonfull");
   pipe->buf.data = kmem_alloc(PIPE_SIZE, M_ZERO);
   pipe->buf.size = PIPE_SIZE;
@@ -51,6 +52,7 @@ static void pipe_free(pipe_t *pipe) {
 
 static int pipe_read(file_t *f, uio_t *uio) {
   pipe_t *pipe = f->f_data;
+  int size = 0;
   int error;
 
   assert(!pipe->reader_closed);
@@ -59,20 +61,23 @@ static int pipe_read(file_t *f, uio_t *uio) {
   if (uio->uio_resid == 0)
     return 0;
 
+  if (f->f_flags & IO_NONBLOCK)
+    return EAGAIN;
+
+  if (token_try_take_all(&pipe->token, &size)) {
+    /* pipe empty & no writers => return end-of-file */
+    if (pipe->writer_closed)
+      return 0;
+    /* restart the syscall if we were interrupted by a signal */
+    if (token_take_all_intr(&pipe->token, &size))
+      return ERESTARTSYS;
+    if (!size)
+      return 0;
+  }
+
   /* no read atomicity for now! */
   WITH_MTX_LOCK (&pipe->mtx) {
-    if (f->f_flags & IO_NONBLOCK)
-      return EAGAIN;
-    while (ringbuf_empty(&pipe->buf)) {
-      /* pipe empty & no writers => return end-of-file */
-      if (pipe->writer_closed)
-        return 0;
-      /* restart the syscall if we were interrupted by a signal */
-      if (cv_wait_intr(&pipe->nonempty, &pipe->mtx))
-        return ERESTARTSYS;
-    }
-
-    if ((error = ringbuf_read(&pipe->buf, uio)))
+    if ((error = ringbuf_readn(&pipe->buf, size, uio)))
       return error;
     /* notify writer that free space is available */
     cv_broadcast(&pipe->nonfull);
@@ -102,7 +107,7 @@ static int pipe_write(file_t *f, uio_t *uio) {
       if ((error = ringbuf_write(&pipe->buf, uio)))
         break;
       /* notify reader that new data is available */
-      cv_broadcast(&pipe->nonempty);
+      token_give(&pipe->token, pipe->buf.count);
       /* nothing left to write? */
       if (uio->uio_resid == 0)
         return 0;
@@ -137,7 +142,7 @@ static int pipe_close(file_t *f) {
     } else {
       pipe->writer_closed = true;
       /* Wake up readers so that they exit. */
-      cv_broadcast(&pipe->nonempty);
+      token_abort(&pipe->token);
     }
     closed = pipe->reader_closed && pipe->writer_closed;
   }

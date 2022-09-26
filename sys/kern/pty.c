@@ -13,6 +13,7 @@
 #include <sys/stat.h>
 #include <sys/devfs.h>
 #include <sys/linker_set.h>
+#include <sys/token.h>
 #include <sys/tty.h>
 
 #define MAX_PTYS 16
@@ -25,7 +26,7 @@ static devfs_node_t *pts_dir;
 
 typedef struct {
   atomic_int pt_number; /* PTY number, if allocated. -1 means free. */
-  condvar_t pt_incv;    /* CV for readers */
+  token_t pt_token;     /* token for readers */
   condvar_t pt_outcv;   /* CV for writers */
 } pty_t;
 
@@ -49,26 +50,29 @@ static void pty_free(pty_t *pty) {
 static int pty_read(file_t *f, uio_t *uio) {
   tty_t *tty = f->f_data;
   pty_t *pty = tty->t_data;
-  int error;
   size_t start_resid = uio->uio_resid;
+  int size = 0;
+  int error;
 
   if (uio->uio_resid == 0)
     return 0;
 
-  SCOPED_MTX_LOCK(&tty->t_lock);
-
   /* Wait until there is at least one byte of data. */
-  while (ringbuf_empty(&tty->t_outq)) {
+  if (token_try_take_all(&pty->pt_token, &size)) {
     /* Don't wait for data if slave device isn't opened. */
     if (!tty_opened(tty))
       return 0;
-    if (cv_wait_intr(&pty->pt_incv, &tty->t_lock))
+    if (token_take_all_intr(&pty->pt_token, &size))
       return ERESTARTSYS;
+    if (!size)
+      return 0;
   }
 
-  /* Data is available: transfer as much as we can. */
-  error = ringbuf_read(&tty->t_outq, uio);
-  tty_getc_done(tty);
+  WITH_MTX_LOCK (&tty->t_lock) {
+    /* Data is available: transfer as much as we can. */
+    error = ringbuf_readn(&tty->t_outq, size, uio);
+    tty_getc_done(tty);
+  }
 
   /* Don't report errors on partial reads. */
   if (start_resid > uio->uio_resid)
@@ -200,7 +204,7 @@ static fileops_t pty_fileops = {
 static void pty_notify_out(tty_t *tty) {
   pty_t *pty = tty->t_data;
   /* Notify PTY readers: input is available. */
-  cv_broadcast(&pty->pt_incv);
+  token_give(&pty->pt_token, tty->t_outq.count);
 }
 
 static void pty_notify_in(tty_t *tty) {
@@ -212,7 +216,7 @@ static void pty_notify_in(tty_t *tty) {
 static void pty_notify_inactive(tty_t *tty) {
   pty_t *pty = tty->t_data;
   /* Notify PTY readers and writers so that they abort. */
-  cv_broadcast(&pty->pt_incv);
+  token_abort(&pty->pt_token);
   cv_broadcast(&pty->pt_outcv);
 }
 
@@ -276,7 +280,7 @@ static void init_pty(void) {
   for (int i = 0; i < MAX_PTYS; i++) {
     pty_t *pty = &pty_array[i];
     pty->pt_number = -1;
-    cv_init(&pty->pt_incv, "pt_incv");
+    token_init(&pty->pt_token, LK_TYPE_BLOCK, 0);
     cv_init(&pty->pt_outcv, "pt_outcv");
   }
 }

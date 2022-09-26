@@ -94,6 +94,27 @@ int ringbuf_read(ringbuf_t *buf, uio_t *uio) {
   return 0;
 }
 
+int ringbuf_readn(ringbuf_t *buf, size_t cnt, uio_t *uio) {
+  assert(uio->uio_op == UIO_READ);
+  /* repeat when used space is split into two parts */
+  while (uio->uio_resid > 0 && cnt) {
+    assert(!ringbuf_empty(buf));
+    /* used space is either [tail, head) or [tail, size) */
+    size_t size =
+      (buf->tail < buf->head) ? buf->head - buf->tail : buf->size - buf->tail;
+    if (size > cnt)
+      size = cnt;
+    if (size > uio->uio_resid)
+      size = uio->uio_resid;
+    int res = uiomove((char *)buf->data + buf->tail, size, uio);
+    if (res)
+      return res;
+    consume(buf, size);
+    cnt -= size;
+  }
+  return 0;
+}
+
 int ringbuf_write(ringbuf_t *buf, uio_t *uio) {
   assert(uio->uio_op == UIO_WRITE);
   /* repeat when free space is split into two parts */

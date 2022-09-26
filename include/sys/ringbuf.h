@@ -32,6 +32,7 @@ bool ringbuf_getnb(ringbuf_t *buf, uint8_t *data, size_t n);
 bool ringbuf_moveb(ringbuf_t *src, ringbuf_t *dst);
 bool ringbuf_movenb(ringbuf_t *src, ringbuf_t *dst, size_t n);
 int ringbuf_read(ringbuf_t *buf, uio_t *uio);
+int ringbuf_readn(ringbuf_t *buf, size_t cnt, uio_t *uio);
 int ringbuf_write(ringbuf_t *buf, uio_t *uio);
 void ringbuf_reset(ringbuf_t *buf);
 

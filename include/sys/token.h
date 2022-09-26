@@ -9,6 +9,7 @@ typedef struct {
   condvar_t cv;
   unsigned nwaiters;
   int count;
+  bool abort;
 } token_t;
 
 void token_init(token_t *token, lk_attr_t la, int count);
@@ -36,6 +37,8 @@ int token_take_timed(token_t *token, int count, systime_t timeout, int *countp);
 void token_give(token_t *token, int count);
 
 #define token_give_one(t) token_give(t, 1)
+
+void token_abort(token_t *token);
 
 void token_destroy(token_t *token);
 
