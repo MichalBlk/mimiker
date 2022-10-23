@@ -1,4 +1,5 @@
 include <sys/pcpu.h>
+include <sys/smp.h>
 include <sys/thread.h>
 include <riscv/mcontext.h>
 include <riscv/riscvreg.h>
@@ -86,3 +87,5 @@ define FPU_CTX_F31 offsetof(mcontext_t, __fregs[31])
 define FPU_CTX_FCSR offsetof(mcontext_t, __fregs[32])
 
 define CTX_SIZE sizeof(ctx_t)
+
+define SMP_BOOTARGS_SIZE sizeof(smp_bootargs_t)

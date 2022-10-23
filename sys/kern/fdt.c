@@ -179,18 +179,24 @@ int FDT_addrsize_cells(phandle_t node, int *addr_cellsp, int *size_cellsp) {
   const ssize_t cell_size = sizeof(pcell_t);
   pcell_t cell;
 
-  /* Retrieve #address-cells. */
-  if (FDT_getencprop(node, "#address-cells", &cell, cell_size) != cell_size)
-    cell = FDT_DEF_ADDR_CELLS;
-  *addr_cellsp = (int)cell;
+  if (addr_cellsp) {
+    /* Retrieve #address-cells. */
+    if (FDT_getencprop(node, "#address-cells", &cell, cell_size) != cell_size)
+      cell = FDT_DEF_ADDR_CELLS;
+    else if ((int)cell > FDT_MAX_ADDR_CELLS)
+      return ERANGE;
+    *addr_cellsp = (int)cell;
+  }
 
-  /* Retrieve #size-cells. */
-  if (FDT_getencprop(node, "#size-cells", &cell, cell_size) != cell_size)
-    cell = FDT_DEF_SIZE_CELLS;
-  *size_cellsp = (int)cell;
+  if (size_cellsp) {
+    /* Retrieve #size-cells. */
+    if (FDT_getencprop(node, "#size-cells", &cell, cell_size) != cell_size)
+      cell = FDT_DEF_SIZE_CELLS;
+    if ((int)cell > FDT_MAX_SIZE_CELLS)
+      return ERANGE;
+    *size_cellsp = (int)cell;
+  }
 
-  if (*addr_cellsp > FDT_MAX_ADDR_CELLS || *size_cellsp > FDT_MAX_SIZE_CELLS)
-    return ERANGE;
   return 0;
 }
 
@@ -373,4 +379,48 @@ int FDT_is_compatible(phandle_t node, const char *compatible) {
     len -= curlen + 1;
   }
   return 0;
+}
+
+int FDT_cpu_foreach(fdt_cpu_foreach_cb_t cb) {
+  phandle_t cpus = FDT_finddevice("/cpus");
+  if (cpus == FDT_NODEV)
+    return -1;
+
+  int addr_cells;
+  if (FDT_addrsize_cells(cpus, &addr_cells, NULL))
+    return -1;
+
+  int cnt = 0;
+
+  for (phandle_t node = FDT_child(cpus); node != FDT_NODEV;
+       node = FDT_peer(node)) {
+    /* Check if `node` is a CPU. */
+    int len;
+    const void *dev_type = fdt_getprop(fdtp, node, "device_type", &len);
+    if (!dev_type)
+      continue;
+
+    if (strcmp(dev_type, "cpu"))
+      continue;
+
+    /* Consider only enabled CPUs. */
+    const void *status = fdt_getprop(fdtp, node, "status", &len);
+    if (!status)
+      continue;
+
+    if (strcmp(status, "okay") && strcmp(status, "ok"))
+      continue;
+
+    /* Fetch register to identify the CPU. */
+    pcell_t reg[FDT_MAX_ADDR_CELLS];
+    if (FDT_getprop(node, "reg", reg, sizeof(reg)) !=
+        sizeof(pcell_t) * addr_cells)
+      continue;
+    u_long hwid = FDT_data_get(reg, addr_cells);
+
+    if (cb(node, hwid))
+      cnt++;
+  }
+
+  return cnt;
 }

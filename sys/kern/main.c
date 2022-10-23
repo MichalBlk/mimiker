@@ -29,6 +29,7 @@
 #include <sys/lockdep.h>
 #include <sys/kcsan.h>
 #include <sys/kgprof.h>
+#include <sys/smp.h>
 
 /* This function mounts some initial filesystems. Normally this would be done by
    userspace init program. */
@@ -109,6 +110,8 @@ __noreturn void kernel_init(void) {
   init_clock();
 
   init_kgprof();
+
+  init_smp();
 
   klog("Kernel initialized!");
 

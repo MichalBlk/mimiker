@@ -10,6 +10,7 @@
 #ifndef _SYS_FDT_H_
 #define _SYS_FDT_H_
 
+#include <stdbool.h>
 #include <sys/types.h>
 
 #define FDT_MAX_RSV_MEM_REGS 16
@@ -38,6 +39,8 @@ typedef struct fdt_intr {
   int icells;
   phandle_t iparent;
 } fdt_intr_t;
+
+typedef bool (*fdt_cpu_foreach_cb_t)(phandle_t node, unsigned hwid);
 
 /*
  * FDT initialization.
@@ -311,5 +314,7 @@ int FDT_get_chosen_bootargs(const char **bootargsp);
  *  - 1: match
  */
 int FDT_is_compatible(phandle_t node, const char *compatible);
+
+int FDT_cpu_foreach(fdt_cpu_foreach_cb_t cb);
 
 #endif /* !_SYS_FDT_H_ */

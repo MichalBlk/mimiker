@@ -48,6 +48,7 @@ SOURCES = \
 	sched.c \
 	signal.c \
 	sleepq.c \
+	smp.c \
 	syscalls.c \
 	taskqueue.c \
 	turnstile.c \

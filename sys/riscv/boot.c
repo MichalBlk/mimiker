@@ -63,6 +63,7 @@
 #include <sys/mimiker.h>
 #include <sys/pcpu.h>
 #include <sys/pmap.h>
+#include <sys/smp.h>
 #include <riscv/abi.h>
 #include <riscv/boot.h>
 #include <riscv/cpufunc.h>
@@ -74,8 +75,8 @@
 
 #define BOOT_PD_VADDR (DMAP_BASE + GROWKERNEL_STRIDE)
 
-static __noreturn void riscv_boot(void *dtb, paddr_t pde, paddr_t sbrk_end,
-                                  vaddr_t vma_end);
+static __noreturn void riscv_boot(unsigned hartid, void *dtb, paddr_t pde,
+                                  paddr_t sbrk_end, vaddr_t vma_end);
 
 /*
  * Virtual memory boot data.
@@ -171,7 +172,7 @@ __boot_text static pde_t *build_page_table(vaddr_t kernel_end) {
   return pde;
 }
 
-__boot_text __noreturn void riscv_init(paddr_t dtb) {
+__boot_text __noreturn void riscv_init(unsigned hartid, paddr_t dtb) {
   if (!(_eboot < _kernel_start || _kernel_end < _boot))
     halt();
 
@@ -206,14 +207,15 @@ __boot_text __noreturn void riscv_init(paddr_t dtb) {
                    "mv a1, %1\n\t"
                    "mv a2, %2\n\t"
                    "mv a3, %3\n\t"
-                   "mv sp, %4\n\t"
-                   "csrw satp, %5\n\t"
+                   "mv a4, %4\n\t"
+                   "mv sp, %5\n\t"
+                   "csrw satp, %6\n\t"
                    "sfence.vma\n\t"
                    "1: j 1b" /* triggers instruction fetch page fault */
                    :
-                   : "r"(dtb_va), "r"(pde), "r"(sbrk_end), "r"(vma_end),
-                     "r"(boot_sp), "r"(satp)
-                   : "a0", "a1", "a2", "a3");
+                   : "r"(hartid), "r"(dtb_va), "r"(pde), "r"(sbrk_end),
+                     "r"(vma_end), "r"(boot_sp), "r"(satp)
+                   : "a0", "a1", "a2", "a3", "a4");
   __unreachable();
 }
 
@@ -246,8 +248,8 @@ static void configure_cpu(void) {
   csr_clear(sie, SIE_SEIE | SIE_STIE | SIE_SSIE);
 }
 
-static __noreturn void riscv_boot(void *dtb, paddr_t pde, paddr_t sbrk_end,
-                                  vaddr_t vma_end) {
+static __noreturn void riscv_boot(unsigned hartid, void *dtb, paddr_t pde,
+                                  paddr_t sbrk_end, vaddr_t vma_end) {
   configure_cpu();
 
   boot_sbrk_end = sbrk_end;
@@ -262,6 +264,10 @@ static __noreturn void riscv_boot(void *dtb, paddr_t pde, paddr_t sbrk_end,
   void *sp = board_stack();
 
   pmap_bootstrap(vma_end, pde, (void *)BOOT_PD_VADDR);
+
+#if SMP
+  smp_set_bp_hwid(hartid);
+#endif
 
   /*
    * Switch to thread0's stack and perform `board_init`.

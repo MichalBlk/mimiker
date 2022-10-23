@@ -28,6 +28,7 @@ static atomic_vaddr_t vm_kernel_end;
 static MTX_DEFINE(vm_kernel_end_lock, 0);
 
 static pmap_t kernel_pmap;
+paddr_t kernel_pd;
 
 /* Bitmap of used ASIDs. */
 static bitstr_t asid_used[bitstr_size(MAX_ASID)] = {0};
@@ -504,6 +505,7 @@ static void pmap_setup(pmap_t *pmap) {
 __long_call void pmap_bootstrap(vaddr_t vma_end, paddr_t pd_pa, void *pd) {
   vm_kernel_end = align(vma_end, PAGESIZE);
   kernel_pmap.pde = pd_pa;
+  kernel_pd = pd_pa;
   pmap_md_bootstrap(pd);
 }
 

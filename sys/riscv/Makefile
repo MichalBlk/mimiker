@@ -13,6 +13,7 @@ SOURCES-RISCV = \
 	sbi.c \
 	sigcode.S \
 	signal.c \
+	smp.c \
 	start.S \
 	switch.S \
 	tlb.c \
