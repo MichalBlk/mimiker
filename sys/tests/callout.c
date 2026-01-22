@@ -50,9 +50,11 @@ static int test_callout_order(void) {
     callout_setup(&callouts[i], callout_ordered, (void *)(intptr_t)order[i]);
   current = 0;
 
-  systime_t now = getsystime();
-  for (int i = 0; i < ORDER_N; i++)
-    callout_schedule_abs(&callouts[i], now + 5 + order[i] * 5);
+  WITH_INTR_DISABLED {
+    systime_t now = getsystime();
+    for (int i = 0; i < ORDER_N; i++)
+      callout_schedule_abs(&callouts[i], now + 5 + order[i] * 5);
+  }
 
   /* Wait for all callouts. */
   for (int i = 0; i < ORDER_N; i++)

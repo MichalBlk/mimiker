@@ -31,23 +31,24 @@ intr_filter_t uart_intr(void *data /* device_t* */) {
     }
 
     /* transmit register empty? */
-    if (uart_tx_ready(dev)) {
-      uint8_t byte;
-      while (uart_tx_ready(dev) && ringbuf_getb(&uart->u_tx_buf, &byte))
-        uart_putc(dev, byte);
-      if (ringbuf_empty(&uart->u_tx_buf)) {
-        /* If we're out of characters and there are characters
-         * in the tty's output queue, signal the tty thread to refill. */
-        if (ttd->ttd_flags & TTY_THREAD_OUTQ_NONEMPTY) {
-          ttd->ttd_flags |= TTY_THREAD_TXRDY;
-          cv_signal(&ttd->ttd_cv);
-        }
-        /* Disable TXRDY interrupts - the tty thread will re-enable them
-         * after filling tx_buf. */
-        uart_tx_disable(dev);
+    if (!uart_tx_ready(dev) || ringbuf_empty(&uart->u_tx_buf))
+      return res;
+    uint8_t byte;
+    while (uart_tx_ready(dev) && ringbuf_getb(&uart->u_tx_buf, &byte))
+      uart_putc(dev, byte);
+    uart_putc(dev, 0);
+    if (ringbuf_empty(&uart->u_tx_buf)) {
+      /* If we're out of characters and there are characters
+      * in the tty's output queue, signal the tty thread to refill. */
+      if (ttd->ttd_flags & TTY_THREAD_OUTQ_NONEMPTY) {
+        ttd->ttd_flags |= TTY_THREAD_TXRDY;
+        cv_signal(&ttd->ttd_cv);
       }
-      res = IF_FILTERED;
+      /* Disable TXRDY interrupts - the tty thread will re-enable them
+      * after filling tx_buf. */
+      uart_tx_disable(dev);
     }
+    res = IF_FILTERED;
   }
 
   return res;

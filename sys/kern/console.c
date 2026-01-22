@@ -1,10 +1,12 @@
 #include <sys/mimiker.h>
 #include <sys/console.h>
 #include <sys/linker_set.h>
+#include <riscv/sbi.h>
 
 static void dummy_init(console_t *dev __unused) {
 }
-static void dummy_putc(console_t *dev __unused, int c __unused) {
+static void dummy_putc(console_t *dev __unused, int c) {
+  sbi_console_putchar(c);
 }
 static int dummy_getc(console_t *dev __unused) {
   return 0;

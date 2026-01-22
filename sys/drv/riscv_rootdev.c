@@ -23,6 +23,7 @@ typedef enum hlic_irq {
   HLIC_IRQ_EXTERNAL_SUPERVISOR,
   HLIC_IRQ_EXTERNAL_HYPERVISOR,
   HLIC_IRQ_EXTERNAL_MACHINE,
+  HLIC_IRQ_PLATFORM0 = 16,
   HLIC_NIRQS
 } hlic_irq_t;
 
@@ -43,6 +44,7 @@ static const char *hlic_intr_name[HLIC_NIRQS] = {
   [HLIC_IRQ_EXTERNAL_SUPERVISOR] = "supervisor external",
   [HLIC_IRQ_EXTERNAL_HYPERVISOR] = "hypervisor external",
   [HLIC_IRQ_EXTERNAL_MACHINE] = "machine external",
+  [HLIC_IRQ_PLATFORM0] = "platform 0"
 };
 
 static hlic_irq_t hlic_intr_map[HLIC_NIRQS] = {
@@ -58,6 +60,7 @@ static hlic_irq_t hlic_intr_map[HLIC_NIRQS] = {
   [HLIC_IRQ_EXTERNAL_USER] = -1,
   [HLIC_IRQ_EXTERNAL_HYPERVISOR] = -1,
   [HLIC_IRQ_EXTERNAL_MACHINE] = -1,
+  [HLIC_IRQ_PLATFORM0] = HLIC_IRQ_PLATFORM0,
 };
 
 /*
@@ -143,10 +146,6 @@ static int rootdev_probe(device_t *bus) {
 }
 
 static int rootdev_attach(device_t *bus) {
-  bus->node = FDT_finddevice("/cpus/cpu/interrupt-controller");
-  if (bus->node == FDT_NODEV)
-    return ENXIO;
-
   intr_root_claim(hlic_intr_handler, bus);
 
   /*
@@ -156,16 +155,11 @@ static int rootdev_attach(device_t *bus) {
 
   int unit = 0;
   int err;
-  device_t *plic;
-
-  if ((err = simplebus_add_child(bus, "/soc/interrupt-controller", unit++, bus,
-                                 &plic)))
-    return err;
 
   if ((err = simplebus_add_child(bus, "/soc/clint", unit++, bus, NULL)))
     return err;
 
-  if ((err = simplebus_add_child(bus, "/soc/serial", unit++, plic, NULL)))
+  if ((err = simplebus_add_child(bus, "/soc/virtio", unit++, bus, NULL)))
     return err;
 
   return bus_generic_probe(bus);

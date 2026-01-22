@@ -129,7 +129,7 @@ void pmap_md_growkernel(vaddr_t old_kva, vaddr_t new_kva) {
   /* We're protected by unique `kernel_pmap.mtx` */
   assert(mtx_owned(&kmap->mtx));
 
-  old_kva = roundup(old_kva, L0_SIZE);
+  old_kva = roundup(old_kva, L0_SIZE) + L0_SIZE;
 
   /* Cannot allocate memory under spin lock, so do it here. */
   for (vaddr_t va = old_kva; va <= new_kva; va += L0_SIZE)

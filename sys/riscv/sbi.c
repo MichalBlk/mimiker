@@ -127,7 +127,8 @@ static sbi_ret_t sbi_get_mimpid(void) {
  */
 
 int sbi_set_timer(uint64_t val) {
-  sbi_ret_t ret = SBI_CALL1(SBI_EXT_ID_TIME, SBI_TIME_SET_TIMER, val);
+  uint32_t v0 = (uint32_t)val, v1 = (uint32_t)(val >> 32);
+  sbi_ret_t ret = SBI_CALL2(SBI_EXT_ID_TIME, SBI_TIME_SET_TIMER, v0, v1);
   return (int)ret.error;
 }
 
@@ -285,6 +286,7 @@ void init_sbi(void) {
    */
   if (!sbi_probe_extension(SBI_EXT_ID_TIME))
     panic("SBI doesn't implement the TIME extension");
+/*
   if (!sbi_probe_extension(SBI_EXT_ID_IPI))
     panic("SBI doesn't implement the IPI extension");
   if (!sbi_probe_extension(SBI_EXT_ID_RFNC))
@@ -294,6 +296,6 @@ void init_sbi(void) {
   if (!sbi_probe_extension(SBI_EXT_ID_SRST) &&
       !sbi_probe_extension(SBI_SHUTDOWN))
     panic("SBI doesn't implement a shutdown or reset extension");
-
+*/
   sbi_print_version();
 }

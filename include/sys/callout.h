@@ -14,6 +14,7 @@ typedef struct callout {
   void *c_arg;      /* function argument */
   uint32_t c_flags;
   unsigned c_index; /* index of bucket this callout is assigned to */
+  bool delegated;
 } callout_t;
 
 /* callout has been delegated to callout thread and will be executed soon */

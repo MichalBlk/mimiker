@@ -2,7 +2,7 @@
 
 TOPDIR = $(realpath ..)
 
-SUBDIR = atto lua sinit # doom mish evtest
+SUBDIR = atto sinit # atto lua doom mish evtest
 
 all: build
 

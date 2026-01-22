@@ -172,7 +172,7 @@ __boot_text static pde_t *build_page_table(vaddr_t kernel_end) {
 }
 
 __boot_text __noreturn void riscv_init(paddr_t dtb) {
-  if (!(_eboot < _kernel_start || _kernel_end < _boot))
+  if (!(_eboot <= _kernel_start || _kernel_end <= _boot))
     halt();
 
   boot_clear(PHYSADDR(_bss), PHYSADDR(_ebss));

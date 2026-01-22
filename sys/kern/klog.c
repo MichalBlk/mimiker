@@ -46,6 +46,8 @@ static const char *subsystems[] = {
   [KL_TTY] = "tty",         [KL_UNDEF] = "???",
 };
 
+static int klog_dump_on = 0;
+
 void init_klog(void) {
   const char *mask = kenv_get("klog-mask");
   klog.mask = mask ? (unsigned)strtol(mask, NULL, 16) : KL_DEFAULT_MASK;
@@ -69,6 +71,9 @@ static void klog_entry_dump(klog_entry_t *entry) {
 static void klog_entry_add(klog_entry_t *newentry) {
   klog_entry_t *entry = &klog.array[klog.last];
   memcpy(entry, newentry, sizeof(klog_entry_t));
+
+  if (klog_dump_on)
+    klog_entry_dump(entry);
 
   klog.prev = klog.last;
   klog.last = next(klog.last);
@@ -172,6 +177,7 @@ __noreturn void klog_panic(klog_origin_t origin, const char *file,
                            uintptr_t arg2, uintptr_t arg3, uintptr_t arg4,
                            uintptr_t arg5, uintptr_t arg6) {
   klog.mask = -1;
+  klog_dump_on = 1;
   klog_append(origin, file, line, format, arg1, arg2, arg3, arg4, arg5, arg6);
   ktest_log_failure();
   halt();

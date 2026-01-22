@@ -60,6 +60,7 @@ static void callout_thread(void *arg) {
 
       elem = TAILQ_FIRST(&delegated);
       TAILQ_REMOVE(&delegated, elem, c_link);
+      elem->delegated = false;
     }
 
     assert(callout_is_active(elem));
@@ -69,11 +70,13 @@ static void callout_thread(void *arg) {
     elem->c_func(elem->c_arg);
 
     WITH_MTX_LOCK (&ci.lock) {
-      callout_clear_active(elem);
-      /* Only notify waiters if the callout isn't already pending
-       * due to a reschedule. */
-      if (!callout_is_pending(elem))
-        sleepq_broadcast(elem);
+      if (!elem->delegated) {
+        callout_clear_active(elem);
+        /* Only notify waiters if the callout isn't already pending
+        * due to a reschedule. */
+        if (!callout_is_pending(elem))
+          sleepq_broadcast(elem);
+      }
     }
   }
 }
@@ -188,6 +191,7 @@ void callout_process(systime_t time) {
         callout_clear_pending(elem);
         TAILQ_REMOVE(head, elem, c_link);
         /* Attach elem to callout thread's queue. */
+        elem->delegated = true;
         TAILQ_INSERT_TAIL(&delegated, elem, c_link);
       }
     }

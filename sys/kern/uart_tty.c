@@ -28,8 +28,11 @@ static void uart_tty_try_bypass_txbuf(device_t *dev) {
   if (!ringbuf_empty(&uart->u_tx_buf))
     return;
 
-  while (uart_tx_ready(dev) && ringbuf_getb(&tty->t_outq, &byte))
-    uart_putc(dev, byte);
+  if (!ringbuf_empty(&tty->t_outq) && uart_tx_ready(dev)) {
+    while (uart_tx_ready(dev) && ringbuf_getb(&tty->t_outq, &byte))
+      uart_putc(dev, byte);
+    uart_putc(dev, 0);
+  }
 }
 
 /*

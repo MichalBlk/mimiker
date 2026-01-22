@@ -212,7 +212,7 @@ static int sb_intr_to_rl(device_t *dev) {
   fdt_intr_t *intrs =
     kmalloc(M_DEV, FDT_MAX_INTRS * sizeof(fdt_intr_t), M_WAITOK | M_ZERO);
   phandle_t node = dev->node;
-  size_t nintrs;
+  size_t nintrs = 0;
   int err = 0;
 
   if (FDT_hasprop(node, "interrupts"))
