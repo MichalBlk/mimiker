@@ -184,7 +184,7 @@ static void pmap_write_pte(pmap_t *pmap, pte_t *ptep, pte_t pte, vaddr_t va) {
   tlb_invalidate(va, pmap->asid);
 }
 
-/* Return PTE pointer for `va`. Allocate page table if needed. */
+/* Return PTE pointer for `va`. Allocate page tables if needed. */
 static pte_t *pmap_ensure_pte(pmap_t *pmap, vaddr_t va) {
   assert(mtx_owned(&pmap->mtx));
 
@@ -316,14 +316,13 @@ bool pmap_extract(pmap_t *pmap, vaddr_t va, paddr_t *pap) {
 }
 
 static inline size_t next_vaddr(int lvl) {
-  if (lvl + 1 < PAGE_TABLE_DEPTH)
-    return pde_size(lvl + 1);
+  if (lvl < PAGE_TABLE_DEPTH - 1)
+    return pde_size(lvl);
   return PAGESIZE;
 }
 
 static void pmap_protect_walk(int lvl, paddr_t pd_pa, vaddr_t va, vaddr_t end,
                               vm_prot_t prot) {
-
   for (size_t pde_i = pde_index(lvl, va);
        pde_valid_index(lvl, pde_i) && va < end;
        pde_i++, va += next_vaddr(lvl)) {
@@ -429,7 +428,7 @@ bool pmap_clear_modified(vm_page_t *pg) {
 }
 
 /*
- * For address user virtual address `va` (must not cross two pages)
+ * For user virtual address `va` (must not cross two pages)
  * check if access with `prot` permission would succeed and emulate
  * referenced & modified bits.
  *
@@ -507,13 +506,10 @@ static void pmap_setup(pmap_t *pmap) {
     vm_page_t *pg = pmap_pagealloc();
     pmap->pde = pg->paddr;
     TAILQ_INSERT_TAIL(&pmap->pte_pages, pg, pageq);
-    mtx_init(&pmap->mtx, 0);
-  } else {
-    /* Create a separate lock class for kernel pmap. */
-    mtx_init(&kernel_pmap.mtx, 0);
+    TAILQ_INIT(&pmap->pv_list);
   }
+  mtx_init(&pmap->mtx, 0);
   pmap->asid = alloc_asid();
-  TAILQ_INIT(&pmap->pv_list);
 
   pmap_md_setup(pmap);
 }

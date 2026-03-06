@@ -30,6 +30,12 @@ RISCV := 1
 XLEN := 32
 endif
 
+ifeq ($(BOARD), rv32_virt)
+ARCH := riscv
+RISCV := 1
+XLEN := 32
+endif
+
 ifeq ($(BOARD), sifive_u)
 ARCH := riscv
 RISCV := 1

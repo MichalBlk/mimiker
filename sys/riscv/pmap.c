@@ -29,7 +29,7 @@
  *
  * The dirty (D) and accessed (A) bits may be managed automaticaly
  * by hardware. In such case, setting of these bits is imperceptible from the
- * perspective of the software. To be compliant with the other ports,
+ * perspective of the software. To be compliant with the other implementations,
  * we assume these bits to be unsupported and emulate them in software.
  */
 
@@ -40,7 +40,7 @@ static const pte_t vm_prot_map[] = {
   [VM_PROT_WRITE] = PTE_SW_WRITE | PTE_D | PTE_W | PTE_R | pte_common,
   [VM_PROT_READ | VM_PROT_WRITE] =
     PTE_SW_WRITE | PTE_SW_READ | PTE_D | PTE_W | PTE_R | pte_common,
-  [VM_PROT_EXEC] = pte_common,
+  [VM_PROT_EXEC] = PTE_X | pte_common,
   [VM_PROT_READ | VM_PROT_EXEC] = PTE_SW_READ | PTE_X | PTE_R | pte_common,
   [VM_PROT_WRITE | VM_PROT_EXEC] =
     PTE_SW_WRITE | PTE_D | PTE_X | PTE_W | PTE_R | pte_common,
@@ -77,6 +77,7 @@ pte_t pte_make(paddr_t pa, vm_prot_t prot, unsigned flags) {
 }
 
 __no_profile inline pte_t pte_protect(pte_t pte, vm_prot_t prot) {
+  assert(prot != VM_PROT_EXEC);
   return (pte & ~PTE_PROT_MASK) | vm_prot_map[prot];
 }
 
@@ -85,7 +86,7 @@ __no_profile inline pte_t pte_protect(pte_t pte, vm_prot_t prot) {
  */
 
 /*
- * Since `pmap_md_update` and `pmap_md_update` are called (via `vm_map_switch`)
+ * Since `pmap_md_activate` and `pmap_md_update` are called (via `vm_map_switch`)
  * from `ctx_switch`, they may be executed in an interrupt context. Thus they
  * cannot take any sleep lock including default mutex.
  *
@@ -129,7 +130,7 @@ void pmap_md_growkernel(vaddr_t old_kva, vaddr_t new_kva) {
   /* We're protected by unique `kernel_pmap.mtx` */
   assert(mtx_owned(&kmap->mtx));
 
-  old_kva = roundup(old_kva, L0_SIZE);
+  old_kva = roundup(old_kva + 1, L0_SIZE);
 
   /* Cannot allocate memory under spin lock, so do it here. */
   for (vaddr_t va = old_kva; va <= new_kva; va += L0_SIZE)

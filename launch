@@ -76,6 +76,11 @@ CONFIG = {
                 'initrd-start': 0x42000000,
                 'simulator': 'renode',
             },
+            'rv32_virt': {
+                'kernel': 'sys/mimiker.elf',
+                'dts': None,
+                'simulator': 'qemu'
+            },
             'sifive_u': {
                 'kernel': 'sys/mimiker.elf',
                 'dts': 'sys/dts/sifive_u.dts',
@@ -135,6 +140,23 @@ CONFIG = {
                 'storage_options': [],
                 'drive': 'if=sd,index=0,format=qcow2,file={path}',
             },
+            'rv32_virt': {
+                'binary': 'qemu-mimiker-riscv32',
+                'options': [
+                    '-machine', 'virt',
+                    '-m', '1G',
+                    '-chardev', 'stdio,mux=on,id=chd0',
+                    '-device', 'virtio-serial-device',
+                    '-device', 'virtconsole,chardev=chd0',
+                    '-serial', 'chardev:chd0',
+                    '-device', 'virtio-keyboard-device',
+                    '-display', 'sdl',
+                    '-device', 'virtio-gpu-device',
+                    '-global', 'virtio-mmio.force-legacy=false',
+                ],
+                'network_options': [],
+                'uarts': []
+            },
             'sifive_u': {
                 'binary': 'qemu-mimiker-riscv64',
                 'options': [
@@ -187,6 +209,9 @@ CONFIG = {
                 'binary': 'aarch64-mimiker-elf-gdb'
             },
             'litex-riscv': {
+                'binary': 'riscv32-mimiker-elf-gdb'
+            },
+            'rv32_virt': {
                 'binary': 'riscv32-mimiker-elf-gdb'
             },
             'sifive_u': {
@@ -352,8 +377,8 @@ class RENODE(Launchable):
         if getvar('config.debug'):
             gdbport = getvar('config.gdbport', failok=False)
             self.options += [f'-e machine StartGdbServer {gdbport}']
-
-        self.options += ['-e start']
+        else:
+            self.options += ['-e start']
 
 
 class GDB(Launchable):
@@ -510,7 +535,7 @@ if __name__ == '__main__':
     parser.add_argument('-g', '--graphics', action='store_true',
                         help='Enable VGA output.')
     parser.add_argument('-b', '--board', default='rpi3',
-                        choices=['malta', 'rpi3', 'litex-riscv', 'sifive_u'],
+                        choices=['malta', 'rpi3', 'litex-riscv', 'rv32_virt', 'sifive_u'],
                         help='Emulated board.')
     parser.add_argument('-s', '--storage', type=str,
                         help='QCOW2 image to be attached as a default storage '

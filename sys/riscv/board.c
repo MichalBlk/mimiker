@@ -59,7 +59,7 @@ static char **process_dtb_initrd(char *buf, size_t buflen, char **tokens,
 static char **process_dtb_bootargs(char **tokens, kstack_t *stk) {
   const char *bootargs;
   if (FDT_get_chosen_bootargs(&bootargs))
-    panic("Failed to retrieve bootargs from DTB!");
+    return tokens;
   return cmdline_extract_tokens(stk, bootargs, tokens);
 }
 

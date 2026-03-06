@@ -27,6 +27,23 @@ ifeq ($(BOARD), litex-riscv)
   endif
 endif
 
+ifeq ($(BOARD), rv32_virt)
+  ifeq ($(LLVM), 1)
+    EXT := ima
+  else
+    EXT := ima_zicsr_zifencei
+  endif
+  ABI := ilp32
+  KERNEL_PHYS := 0x80200000
+  KERNEL_VIRT := 0x80000000
+  KERNEL-IMAGES := mimiker.img
+  ifeq ($(KERNEL), 1)
+    CPPFLAGS += -DFPU=0
+    ASAN_SHADOW_OFFSET := 0x90000000
+  endif
+endif
+
+
 ifeq ($(BOARD), sifive_u)
   EXT := g
   ABI := lp64d

@@ -12,7 +12,11 @@ SOURCES = \
 	simplebus.c \
 	uart.c \
 	umass.c \
-	usb.c
+	usb.c \
+	virtio.c \
+	viocon.c \
+	viokbd.c \
+	viogpu.c
 
 SOURCES-MIPS = \
 	82371AB.c \

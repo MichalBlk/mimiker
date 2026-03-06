@@ -6,6 +6,7 @@
 #include <sys/interrupt.h>
 #include <sys/klog.h>
 #include <dev/simplebus.h>
+#include <dev/virtio.h>
 #include <riscv/mcontext.h>
 #include <riscv/riscvreg.h>
 #include <riscv/vm_param.h>
@@ -130,7 +131,7 @@ static int rootdev_map_resource(device_t *dev, resource_t *r) {
   r->r_bus_tag = generic_bus_space;
 
   return bus_space_map(r->r_bus_tag, r->r_start,
-                       roundup(resource_size(r), PAGESIZE), &r->r_bus_handle);
+                       resource_size(r), &r->r_bus_handle);
 }
 
 static void rootdev_unmap_resource(device_t *dev, resource_t *r) {
@@ -158,15 +159,24 @@ static int rootdev_attach(device_t *bus) {
   int err;
   device_t *plic;
 
-  if ((err = simplebus_add_child(bus, "/soc/interrupt-controller", unit++, bus,
-                                 &plic)))
+  if ((err = simplebus_add_child_path(bus, "/soc/interrupt-controller", unit, bus,
+                                 &plic))) {
+    if (err != ENXIO || (err = simplebus_add_child_path(bus, "/soc/plic", unit, bus, &plic)))
+      return err;
+  }
+  unit++;
+
+  if ((err = simplebus_add_child_path(bus, "/soc/clint", unit++, bus, NULL)))
     return err;
 
-  if ((err = simplebus_add_child(bus, "/soc/clint", unit++, bus, NULL)))
-    return err;
+  if ((err = simplebus_add_child_path(bus, "/soc/serial", unit, plic, NULL))) {
+    if (err != ENXIO)
+      return err;
+  } else {
+    unit++;
+  }
 
-  if ((err = simplebus_add_child(bus, "/soc/serial", unit++, plic, NULL)))
-    return err;
+  virtio_init(bus, unit, plic);
 
   return bus_generic_probe(bus);
 }

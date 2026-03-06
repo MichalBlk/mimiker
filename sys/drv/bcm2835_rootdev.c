@@ -123,20 +123,20 @@ static int rootdev_attach(device_t *bus) {
   int unit = 0;
   device_t *bcm2835_pic, *emmc;
 
-  if ((err = simplebus_add_child(bus, "/soc/intc", unit++, bus, &bcm2835_pic)))
+  if ((err = simplebus_add_child_path(bus, "/soc/intc", unit++, bus, &bcm2835_pic)))
     return err;
 
-  if ((err = simplebus_add_child(bus, "/timer", unit++, bus, NULL)))
+  if ((err = simplebus_add_child_path(bus, "/timer", unit++, bus, NULL)))
     return err;
 
-  if ((err = simplebus_add_child(bus, "/soc/gpio", unit++, bcm2835_pic, NULL)))
+  if ((err = simplebus_add_child_path(bus, "/soc/gpio", unit++, bcm2835_pic, NULL)))
     return err;
 
   if ((err =
-         simplebus_add_child(bus, "/soc/serial", unit++, bcm2835_pic, NULL)))
+         simplebus_add_child_path(bus, "/soc/serial", unit++, bcm2835_pic, NULL)))
     return err;
 
-  if ((err = simplebus_add_child(bus, "/soc/emmc", unit++, bcm2835_pic, &emmc)))
+  if ((err = simplebus_add_child_path(bus, "/soc/emmc", unit++, bcm2835_pic, &emmc)))
     return err;
   emmc->devclass = &DEVCLASS(emmc);
 

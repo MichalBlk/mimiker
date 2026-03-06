@@ -172,7 +172,7 @@ __boot_text static pde_t *build_page_table(vaddr_t kernel_end) {
 }
 
 __boot_text __noreturn void riscv_init(paddr_t dtb) {
-  if (!(_eboot < _kernel_start || _kernel_end < _boot))
+  if (!(_eboot <= _kernel_start || _kernel_end <= _boot))
     halt();
 
   boot_clear(PHYSADDR(_bss), PHYSADDR(_ebss));
@@ -242,7 +242,7 @@ static void configure_cpu(void) {
    * NOTE: respective interrupts will be enabled by appropriate device drivers
    * while registering an interrupt handling routine.
    */
-  csr_clear(sie, SIP_SEIP | SIP_STIP | SIP_SSIP);
+  csr_clear(sie, SIP_SSIP);
   csr_clear(sie, SIE_SEIE | SIE_STIE | SIE_SSIE);
 }
 

@@ -127,7 +127,12 @@ static sbi_ret_t sbi_get_mimpid(void) {
  */
 
 int sbi_set_timer(uint64_t val) {
+#if __riscv_xlen == 64
   sbi_ret_t ret = SBI_CALL1(SBI_EXT_ID_TIME, SBI_TIME_SET_TIMER, val);
+#else
+  uint32_t v0 = (uint32_t)val, v1 = (uint32_t)(val >> 32);
+  sbi_ret_t ret = SBI_CALL2(SBI_EXT_ID_TIME, SBI_TIME_SET_TIMER, v0, v1);
+#endif
   return (int)ret.error;
 }
 

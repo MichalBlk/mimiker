@@ -32,6 +32,7 @@ typedef enum {
   DIF_EMMC,
   DIF_USBHC,
   DIF_USB,
+  DIF_VIRTIO,
   DIF_COUNT /* this must be the last item */
 } drv_if_t;
 
@@ -45,7 +46,7 @@ typedef enum {
  *   to be in working state (i.e. memory allocation, resource management,
  *   interrupt management). The main goal of this pass is to initialize enough
  *   drivers to clock subsystem (and thus scheduler & callouts) and console.
- * - SECOND_PASS: during this pass following kernel APIs are available:
+ * - SECOND_PASS: during this pass the following kernel APIs are available:
  *   callouts, kernel threads, devfs.
  * If extra pass is needed, please add a coresponding description here and
  * explain what kernel APIs are required. */
@@ -71,11 +72,12 @@ typedef enum {
   DEV_BUS_ISA,
   DEV_BUS_EMMC,
   DEV_BUS_USB,
+  DEV_BUS_VIRTIO,
 } device_bus_t;
 
 struct device {
   /* Device hierarchy. */
-  device_t *parent; /* parent node (bus?) or null (root or pseudo-dev) */
+  device_t *parent; /* parent node (bus?) or NULL (root or pseudo-dev) */
   device_t *pic;    /* device's interrupt controller */
   TAILQ_ENTRY(device) link; /* node on list of siblings */
   device_list_t children;   /* head of children devices */
